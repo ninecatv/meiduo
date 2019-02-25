@@ -1,0 +1,3 @@
+SMS_CODE_REDIS_EXPIRES = 300   # 短信验证码有效时长
+
+SEND_SMS_CODE_INTERVAL = 60    # 发送短信标记

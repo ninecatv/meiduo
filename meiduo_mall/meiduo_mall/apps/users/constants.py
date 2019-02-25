@@ -1,0 +1,1 @@
+USER_ADDRESS_COUNTS_LIMIT = 20   # 用户上限地址
