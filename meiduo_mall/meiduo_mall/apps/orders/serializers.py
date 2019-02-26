@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from goods.models import SKU
+from users.models import User
 from .models import OrderInfo, OrderGoods
 
 
@@ -99,7 +100,8 @@ class SaveOrderSerializer(serializers.ModelSerializer):
                         new_sales = origin_sales + sku_count  # 增加销量
 
                         # 减少库存增加销量, sku 使用乐观锁
-                        result = SKU.objects.filter(id=sku_id, stock=origin_stock).update(stock=new_stock, sales=new_sales)
+                        result = SKU.objects.filter(id=sku_id, stock=origin_stock).update(stock=new_stock,
+                                                                                          sales=new_sales)
 
                         if result == 0:
                             continue  # 跳出本次循环,进入下一次循环
@@ -158,3 +160,40 @@ class OrderSettlementSerializer(serializers.Serializer):
     # max_digits 一共多少位；decimal_places：小数点保留几位
     freight = serializers.DecimalField(label='运费', max_digits=10, decimal_places=2)
     skus = CartSKUSerializer(many=True)
+
+
+class SKUCommentSerializers(serializers.ModelSerializer):
+    """商品评论信息"""
+
+    class Meta:
+        model = SKU
+        fields = ['id', 'name', 'price', 'default_image_url']
+
+
+class GoodsCommentSerializer(serializers.ModelSerializer):
+    """订单商品评论"""
+    sku = SKUCommentSerializers()
+
+    class Meta:
+        model = OrderGoods
+        fields = ['id', 'sku', 'price', 'comment', 'score', 'is_anonymous']
+
+
+class UpdateCommentSerializer(serializers.Serializer):
+    """用户订单评论序列化器"""
+
+    comment = serializers.CharField(label='评论内容')
+    score = serializers.IntegerField(label='评分', default=5)
+    is_anonymous = serializers.BooleanField(label='是否匿名')
+
+    def update(self, instance, validated_data):
+        instance.comment = validated_data.get('comment')
+        instance.score = validated_data.get('score')
+        instance.is_anonymous = validated_data.get('is_anonymous')
+        instance.is_commented = True
+        instance.save()
+
+        sku = instance.sku
+        sku.comments += 1
+        sku.save()
+        return validated_data
