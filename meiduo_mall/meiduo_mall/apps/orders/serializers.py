@@ -158,3 +158,31 @@ class OrderSettlementSerializer(serializers.Serializer):
     # max_digits 一共多少位；decimal_places：小数点保留几位
     freight = serializers.DecimalField(label='运费', max_digits=10, decimal_places=2)
     skus = CartSKUSerializer(many=True)
+
+
+class GoodsListSerializer(serializers.ModelSerializer):
+    """订单商品列表"""
+    class Meta:
+        model = SKU
+        fields = ('name', 'default_image_url')
+
+
+class OrderGoodsSerializer(serializers.ModelSerializer):
+    """购物车商品数据序列化器"""
+    sku = GoodsListSerializer(read_only=True)
+
+    class Meta:
+        model = OrderGoods
+        fields = ('sku', 'count', 'price')
+
+
+class OrderListSerializer(serializers.ModelSerializer):
+    """订单列表"""
+    create_time = serializers.DateTimeField(label='订单时间', format='%Y-%m-%d %H:%M')
+    skus = OrderGoodsSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = OrderInfo
+        fields = ['create_time', 'order_id', 'pay_method', 'freight', 'status', 'skus', 'total_amount']
+
+

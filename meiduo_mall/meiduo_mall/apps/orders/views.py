@@ -1,21 +1,45 @@
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import CreateAPIView
+from rest_framework.mixins import CreateModelMixin, ListModelMixin
 from rest_framework.permissions import IsAuthenticated
 from django_redis import get_redis_connection
 from decimal import Decimal
 
 # Create your views here.
 from goods.models import SKU
-from .serializers import OrderSettlementSerializer, SaveOrderSerializer
+from rest_framework.viewsets import GenericViewSet
+
+from meiduo_mall.meiduo_mall.apps.orders.models import OrderInfo
+from .serializers import OrderSettlementSerializer, SaveOrderSerializer, OrderListSerializer
 
 
-class SaveOrderView(CreateAPIView):
-    """保存订单"""
+class SaveOrderView(CreateModelMixin, ListModelMixin, GenericViewSet):
+    """提交订单/订单列表"""
+    permission_classes = [IsAuthenticated]
 
-    permission_classes = [IsAuthenticated]  # 只有登陆用户才能访问该视图
-    serializer_class = SaveOrderSerializer
+    def get_queryset(self):
+        if self.action == 'list':
+            return OrderInfo.objects.filter(user=self.request.user)
+        else:
+            return None
+
+    def get_serializer_class(self):
+        """根据action不同选择不同的序列化器"""
+        if self.action == 'list':
+            return OrderListSerializer
+        else:
+            return SaveOrderSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        count = queryset.count()
+        return Response({'count':count, 'results': serializer.data})
 
 
 class OrderSettlementView(APIView):

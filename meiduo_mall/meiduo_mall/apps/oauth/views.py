@@ -7,9 +7,10 @@ from django.conf import settings
 import logging
 from rest_framework_jwt.settings import api_settings
 
-from .models import QQAuthUser
+from meiduo_mall.meiduo_mall.utils.weibo.weibotool import OAuthWeibo
+from .models import QQAuthUser, OAuthSinaUser
 from .utils import generate_save_user_token
-from .serializer import QQAuthUserSerializer
+from .serializer import QQAuthUserSerializer, SinaAuthUserSerializer
 from carts.utils import merge_cart_cookie_to_redis
 # Create your views here.
 
@@ -142,3 +143,81 @@ class OAuthUrlView(APIView):
 
         # 把生成的qq登陆连接返回给前端
         return Response({'login_url': login_url})
+
+
+class SinaAuthURLView(APIView):
+    # http: // open.weibo.com / wiki / Oauth2 / authorize
+    # 获取access_token接口：http: // open.weibo.com / wiki / Oauth2 / access_token
+    def get(self, request):
+        next = request.query_params.get('next')
+        if not next:
+            next = '/'
+        oauthweibo = OAuthWeibo(client_id=settings.WEIBO_CLIENT_ID,
+                        client_secret=settings.WEIBO_CLIENT_SECRET,
+                        redirect_uri=settings.WEIBO_REDIRECT_URI,
+                        state=next)
+        login_url = oauthweibo.get_weibo_url()
+        return Response({'login_url':login_url})
+
+
+class SinaAuthUserView(APIView):
+    """用户扫码登陆的回调处理"""
+    def get(self, request):
+        code = request.query_params.get('code')
+        if not code:
+            return Response({'message': '缺少code'}, status=status.HTTP_400_BAD_REQUEST)
+
+        oauthweibo = OAuthWeibo(client_id=settings.WEIBO_CLIENT_ID,
+                          client_secret=settings.WEIBO_CLIENT_SECRET,
+                          redirect_uri=settings.WEIBO_REDIRECT_URI
+                    )
+        try:
+            access_token = oauthweibo.get_access_token(code)
+        except Exception as e:
+            logger.info(e)
+            return Response({'message': '微博服务器异常'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        try:
+            # 使用access_token查询用户是否绑定
+            oauthweibouser = OAuthSinaUser.objects.get(access_token=access_token)
+        except OAuthSinaUser.DoesNotExist:
+            # 把access_token进行加密安全处理,再响应给浏览器,让它先帮我们保存一会
+            access_token = generate_save_user_token(access_token)
+            return Response({'access_token': access_token})
+        else:
+            # 如果已经绑定,直接生成JWT token返回
+            jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
+            jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
+
+            # 获取oauth_user对象
+            user = oauthweibouser.user
+            payload = jwt_payload_handler(user)
+            token = jwt_encode_handler(payload)
+
+            response = Response({
+                'token': token,
+                'user_id': user.id,
+                'username': user.username
+            })
+            # 合并购物车
+            merge_cart_cookie_to_redis(request, response, user)
+            return response
+
+    def post(self, request):
+        serializer = SinaAuthUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        # ⽣成JWT token，并响应
+        jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
+        jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
+        payload = jwt_payload_handler(user)
+        token = jwt_encode_handler(payload)
+        response = Response({
+            'token': token,
+            'user_id': user.id,
+            'username': user.username
+        })
+
+        merge_cart_cookie_to_redis(request, response, user)
+        return response
+

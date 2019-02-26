@@ -3,7 +3,7 @@ from django_redis import get_redis_connection
 
 from .utils import check_save_user_token
 from users.models import User
-from .models import QQAuthUser
+from .models import QQAuthUser, OAuthSinaUser
 
 
 class QQAuthUserSerializer(serializers.Serializer):
@@ -75,3 +75,59 @@ class QQAuthUserSerializer(serializers.Serializer):
             )
 
             return user
+
+
+class SinaAuthUserSerializer(serializers.Serializer):
+    """微博用户注册序列化器"""
+    mobile = serializers.RegexField(label='手机号', regex=r'1[3-9]\d{9}$')
+    access_token = serializers.CharField(label='操作凭证')
+    password = serializers.CharField(label='密码', max_length=20, min_length=8)
+    sms_code = serializers.CharField(label='短信验证码')
+
+    def validate(self, data):
+        """校验参数"""
+        # 获取access_token
+        access_token = check_save_user_token(data['access_token'])
+        if not access_token:
+            raise serializers.ValidationError('access_token无效')
+
+        data['access_token'] = access_token
+        # 检验短信验证码
+        mobile = data['mobile']
+        sms_code = data['sms_code']
+        redis_conn = get_redis_connection('verify_codes')
+        real_sms_code = redis_conn.get('sms_%s' % mobile)
+        if real_sms_code.decode() != sms_code:  # 存进redis数据库是字符串类型,取出来是bytes类型
+            raise serializers.ValidationError('短信验证码错误')
+
+        # 检验密码
+        try:
+            user = User.objects.get(mobile=mobile)
+        except User.DoesNotExist:
+            # 取不出来user说明是新用户
+            pass
+        else:
+            password = data['password']
+            if not user.check_password(password):
+                raise serializers.ValidationError('密码错误')
+            data['user'] = user
+
+        return data
+
+    def create(self, validated_data):
+        # 检验用户是否存在
+        user = validated_data.get('user')
+        if not user:
+            user = User(
+                username=validated_data.get('username'),
+                mobile=validated_data.get('mobile'),
+                password=validated_data.get('password')
+            )
+            user.set_password(validated_data.get('password'))
+            user.save()
+
+        OAuthSinaUser.objects.create(
+                access_token=validated_data.get('access_token'),
+                user=user
+            )
+        return user
