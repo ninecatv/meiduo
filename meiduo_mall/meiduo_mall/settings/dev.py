@@ -348,3 +348,8 @@ DATABASE_ROUTERS = ['meiduo_mall.utils.db_router.MasterSlaveDBRouter']
 
 # 收集静态文件存放目录
 STATIC_ROOT = os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'front_end_pc/static')
+
+# 微博第三方登录参数配置
+WEIBO_CLIENT_ID = '3305669385'
+WEIBO_CLIENT_SECRET = '74c7bea69d5fc64f5c3b80c802325276'
+WEIBO_REDIRECT_URI = 'http://www.meiduo.site:8080/sina_callback.html'

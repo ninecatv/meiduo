@@ -7,7 +7,7 @@ from django.conf import settings
 import logging
 from rest_framework_jwt.settings import api_settings
 
-from meiduo_mall.meiduo_mall.utils.weibo.weibotool import OAuthWeibo
+from utils.weibo.weibotool import OAuthWeibo
 from .models import QQAuthUser, OAuthSinaUser
 from .utils import generate_save_user_token
 from .serializer import QQAuthUserSerializer, SinaAuthUserSerializer

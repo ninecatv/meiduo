@@ -10,7 +10,6 @@ urlpatterns = [
 
     url(r'^orders/$', views.SaveOrderView.as_view({'get': 'list', 'post': 'create'})),
 
-    url(r'^orders/$', views.SaveOrderView.as_view()),
 
     # 商品评论
     # http://api.meiduo.site:8000/skus/1/comments/

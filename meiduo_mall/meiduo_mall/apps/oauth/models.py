@@ -24,6 +24,6 @@ class OAuthSinaUser(BaseModel):
     access_token = models.CharField(max_length=64, verbose_name='access_token', db_index=True)
 
     class Meta:
-        db_table = 'tb_oauth_sina'
+        db_table = 'tb_weibo_oauth'
         verbose_name = 'sina登录用户数据'
         verbose_name_plural = verbose_name

@@ -9,11 +9,10 @@ from decimal import Decimal
 
 # Create your views here.
 from goods.models import SKU
-
 from rest_framework.viewsets import GenericViewSet
-
+from .serializers import OrderSettlementSerializer, SaveOrderSerializer, OrderListSerializer, UpdateCommentSerializer, \
+    GoodsCommentSerializer
 from orders.models import OrderGoods, OrderInfo
-from .serializers import OrderSettlementSerializer, SaveOrderSerializer, GoodsCommentSerializer, UpdateCommentSerializer
 
 
 # /skus/16/comments/
@@ -43,10 +42,18 @@ class UNCommentsView(APIView):
 
     def get(self, request, pk):
         # 根据pk查询订单所有评论
-        order_comments = OrderGoods.objects.filter(order_id=pk).all()
+        order_goods_comments = OrderGoods.objects.filter(order_id=pk, is_commented=False).all()
+        # 如果没有获取到订单中商品评论,就说明评论完成了,把订单状态改成已完成
+        if not order_goods_comments:
+            try:
+                order_info = OrderInfo.objects.get(order_id=pk)
+                order_info.status = OrderInfo.ORDER_STATUS_ENUM['FINISHED']
+                order_info.save()
+            except OrderInfo.DoesNotExist:
+                return Response({'message': '订单异常'}, status=status.HTTP_400_BAD_REQUEST)
 
         # 创建序列化器
-        serializer = GoodsCommentSerializer(order_comments, many=True)
+        serializer = GoodsCommentSerializer(order_goods_comments, many=True)
 
         return Response(serializer.data)
 
@@ -71,17 +78,13 @@ class UNCommentsView(APIView):
         return Response({'message': '评论成功'})
 
 
-from meiduo_mall.meiduo_mall.apps.orders.models import OrderInfo
-from .serializers import OrderSettlementSerializer, SaveOrderSerializer, OrderListSerializer
-
-
 class SaveOrderView(CreateModelMixin, ListModelMixin, GenericViewSet):
     """提交订单/订单列表"""
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         if self.action == 'list':
-            return OrderInfo.objects.filter(user=self.request.user)
+            return OrderInfo.objects.filter(user=self.request.user).order_by('-create_time')
         else:
             return None
 
@@ -100,7 +103,7 @@ class SaveOrderView(CreateModelMixin, ListModelMixin, GenericViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         count = queryset.count()
-        return Response({'count':count, 'results': serializer.data})
+        return Response({'count': count, 'results': serializer.data})
 
 
 class OrderSettlementView(APIView):

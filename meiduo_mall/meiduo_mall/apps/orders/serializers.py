@@ -186,3 +186,39 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = ['create_time', 'order_id', 'pay_method', 'freight', 'status', 'skus', 'total_amount']
 
 
+class SKUCommentSerializers(serializers.ModelSerializer):
+    """商品评论信息"""
+
+    class Meta:
+        model = SKU
+        fields = ['id', 'name', 'price', 'default_image_url']
+
+
+class GoodsCommentSerializer(serializers.ModelSerializer):
+    """订单商品评论"""
+    sku = SKUCommentSerializers()
+
+    class Meta:
+        model = OrderGoods
+        fields = ['id', 'sku', 'price', 'comment', 'score', 'is_anonymous']
+
+
+class UpdateCommentSerializer(serializers.Serializer):
+    """用户订单评论序列化器"""
+
+    comment = serializers.CharField(label='评论内容')
+    score = serializers.IntegerField(label='评分', default=5)
+    is_anonymous = serializers.BooleanField(label='是否匿名')
+
+    def update(self, instance, validated_data):
+        instance.comment = validated_data.get('comment')
+        instance.score = validated_data.get('score')
+        instance.is_anonymous = validated_data.get('is_anonymous')
+        instance.is_commented = True
+        instance.save()
+
+        sku = instance.sku
+        sku.comments += 1
+        sku.save()
+
+        return validated_data
